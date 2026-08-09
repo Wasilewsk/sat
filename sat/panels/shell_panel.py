@@ -60,18 +60,44 @@ class ShellPanel(wx.Panel):
             return
         target = self.frame.runner.describe()
         self._append(f"> {command}  (on {target})\n")
-        announce(self, f"Running: {command} on {target}")
+        tokens = command.split()
+        use_admin = bool(tokens) and tokens[0] == "sudo"
+        if use_admin:
+            announce(self, f"Running with sudo using the saved password: "
+                           f"{command} on {target}")
+        else:
+            announce(self, f"Running: {command} on {target}")
+        self._execute(command, use_admin)
 
+    def _execute(self, command, use_admin):
         def work():
+            if use_admin:
+                return self.frame.runner.run_admin(command, timeout=120)
             return self.frame.runner.run(command, timeout=120)
 
         def done(res):
             body = res.combined or res.error or "(no output)"
+            if (not res.ok and not use_admin
+                    and self._looks_like_sudo_issue(body)):
+                # The user typed a bare sudo command; the SSH session has
+                # no terminal, so retry feeding the saved password.
+                announce(self, "That sudo command could not read a "
+                               "password; retrying with the saved one.")
+                self._append("(retrying with sudo using the saved "
+                             "password)\n")
+                self._execute(command, True)
+                return
             self._append(body + "\n")
             announce(self, f"Command finished: {res.summary()}")
             self.command_text.SetFocus()
 
         run_in_thread(work, done)
+
+    @staticmethod
+    def _looks_like_sudo_issue(body):
+        low = body.lower()
+        return ("a terminal is required" in low
+                or "a password is required" in low)
 
     def _append(self, text):
         current = self.output.GetValue()

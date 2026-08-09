@@ -44,9 +44,10 @@ Notes
   * The SSH connection accepts unknown host keys automatically.
   * State-changing commands use sudo automatically: over SSH the saved
     password is piped to `sudo -S` (with a plain-run fallback); locally
-    passwordless `sudo -n` is tried first.
+    passwordless `sudo -n` is tried first.  `sudo ...` typed in the
+    Shell tab uses the saved password too.
   * The Monitor tab beeps and announces an alert if the server
-    reboots.
+    reboots, and can reboot or shut down the connected server.
   * Passwords are stored in plain text in ~/.sat-data.
 """
 

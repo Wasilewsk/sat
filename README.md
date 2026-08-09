@@ -27,7 +27,9 @@ Built with Python, [wxPython](https://wxpython.org) and
 - **Monitor** - uptime, load average, **memory and disk usage** on the
   current host, with automatic refresh every 10/30/60 seconds (updates
   quietly, no spoken spam).  If the server **reboots**, SAT beeps and
-  announces an alert even during quiet auto-refresh.
+  announces an alert even during quiet auto-refresh.  For connected
+  servers it also offers **Reboot** and **Shutdown** buttons (with a
+  warning confirmation; disabled on the local machine).
 - **Ports** - list every listening **TCP and UDP** port (works with `ss`
   on Linux servers, `netstat` on Windows), with **well-known service
   names** and the owning process where available, and open a port in
@@ -44,7 +46,10 @@ Built with Python, [wxPython](https://wxpython.org) and
 - **Shell** - a line-based command prompt on the current host.  Type a
   command, press Enter, arrow through the plain-text output.  Works
   locally and over SSH, and is far easier to use with a screen reader
-  than a terminal emulator.
+  than a terminal emulator.  Commands that start with `sudo` (or that
+  fail because sudo needs a terminal/password) automatically use the
+  saved password, since SSH sessions have no terminal for sudo to
+  prompt on.
 
 ## Install and run
 
@@ -122,7 +127,8 @@ need root.  SAT handles this automatically:
 - **Over SSH**: the password saved for the host is fed to
   `sudo -S`; if sudo fails (no sudo installed, wrong password, or the
   user simply has the needed rights like the `docker` group), SAT falls
-  back to running the command plainly.
+  back to running the command plainly.  This applies to panel actions
+  and to `sudo ...` commands typed in the Shell tab.
 - **MOTD over SSH**: SFTP cannot sudo, so SAT writes a temp file in the
   user's home directory and `sudo cp`s it into place when the direct
   write is denied.

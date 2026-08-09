@@ -11,7 +11,7 @@ import re
 import wx
 
 from sat.announce import announce
-from sat.runner import LocalRunner
+from sat.runner import LocalRunner, SshRunner
 from sat.util import run_in_thread
 
 REFRESH_OPTIONS = ["Off", "10 seconds", "30 seconds", "60 seconds"]
@@ -47,6 +47,15 @@ class MonitorPanel(wx.Panel):
         row.Add(self.refresh_btn, 0)
         outer.Add(row, 0, wx.EXPAND | wx.ALL, 8)
 
+        power = wx.BoxSizer(wx.HORIZONTAL)
+        power.Add(wx.StaticText(self, label="Server power:"), 0,
+                  wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
+        self.reboot_btn = wx.Button(self, label="&Reboot server")
+        self.shutdown_btn = wx.Button(self, label="S&hutdown server")
+        power.Add(self.reboot_btn, 0, wx.RIGHT, 6)
+        power.Add(self.shutdown_btn, 0)
+        outer.Add(power, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
+
         outer.Add(wx.StaticText(
             self,
             label="Uptime, load, memory and disk on the current host:"), 0,
@@ -60,6 +69,9 @@ class MonitorPanel(wx.Panel):
         self.refresh_btn.Bind(wx.EVT_BUTTON,
                               lambda e: self.refresh(announce_result=True))
         self.refresh_choice.Bind(wx.EVT_CHOICE, self._on_refresh_choice)
+        self.reboot_btn.Bind(wx.EVT_BUTTON, lambda e: self._power("reboot"))
+        self.shutdown_btn.Bind(wx.EVT_BUTTON,
+                               lambda e: self._power("poweroff"))
         self.Bind(wx.EVT_TIMER, self._on_timer, self._timer)
 
     def _on_refresh_choice(self, event):
@@ -98,6 +110,7 @@ class MonitorPanel(wx.Panel):
         """Fetch uptime/load/memory/disk.  Automatic refreshes stay
         quiet unless the server rebooted; manual ones announce a
         summary."""
+        self._update_power_buttons()
         if announce_result:
             announce(self, "Reading system status...")
 
@@ -254,6 +267,50 @@ class MonitorPanel(wx.Panel):
         self._last_seconds = seconds
         self._last_human = self._human(seconds)
         return None
+
+    # ---------------------------------------------------------- server power
+
+    def _update_power_buttons(self):
+        """Reboot/shutdown only make sense on a connected server, never
+        on the local workstation."""
+        connected = isinstance(self.frame.runner, SshRunner)
+        self.reboot_btn.Enable(connected)
+        self.shutdown_btn.Enable(connected)
+
+    def _power(self, action):
+        runner = self.frame.runner
+        if not isinstance(runner, SshRunner):
+            announce(self, "Reboot and shutdown only work on a connected "
+                           "server, not the local machine.")
+            return
+        verb = "Reboot" if action == "reboot" else "Shut down"
+        if wx.MessageBox(
+                f"{verb} the server {runner.describe()}? This disconnects "
+                "SAT and interrupts running services.",
+                f"Confirm {verb.lower()}",
+                wx.YES_NO | wx.ICON_WARNING) != wx.YES:
+            return
+        flag = "-r" if action == "reboot" else "-h"
+        command = f"systemctl {action} 2>/dev/null || shutdown {flag} now"
+        announce(self, f"{verb}ing the server...")
+
+        def work():
+            return runner.run_admin(command, timeout=60)
+
+        def done(res):
+            if res.ok:
+                announce(self, f"{verb} command completed.")
+                return
+            low = (res.error or res.combined).lower()
+            if "timed out" in low or "closed" in low or "reset" in low:
+                # The machine went down before answering; expected.
+                announce(self, f"{verb} command sent. The connection "
+                               "dropped, as expected.")
+            else:
+                announce(self, f"{verb} failed: "
+                               f"{res.error or res.combined}")
+
+        run_in_thread(work, done)
 
     @staticmethod
     def _human(seconds):

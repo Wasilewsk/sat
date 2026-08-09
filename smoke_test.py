@@ -96,7 +96,19 @@ def main():
     assert mon._check_reboot(fake(259200)) is None  # 3 days, baseline
     reboot = mon._check_reboot(fake(50))
     assert reboot and "rebooted" in reboot, reboot
+    # Reboot/shutdown are disabled on the local machine.
+    mon._update_power_buttons()
+    assert not mon.reboot_btn.IsEnabled()
+    assert not mon.shutdown_btn.IsEnabled()
     mon.Destroy()
+
+    # Shell detects bare-sudo no-tty errors for the retry path.
+    from sat.panels.shell_panel import ShellPanel
+    assert ShellPanel._looks_like_sudo_issue(
+        "sudo: a terminal is required to read the password; "
+        "either use the -S option to read from standard input "
+        "or configure an askpass helper\nsudo: a password is required")
+    assert not ShellPanel._looks_like_sudo_issue("permission denied")
 
     # Apt search/list parsing.
     from sat.panels.apt_panel import AptPanel

@@ -255,7 +255,20 @@ class SshRunner(Runner):
         res = self.run("sudo -n " + command, timeout)
         if res.ok:
             return res
-        return self.run(command, timeout)
+        res = self.run(command, timeout)
+        if not res.ok and self._looks_like_sudo_issue(res.combined):
+            hint = (" (SAT could not use the saved password for sudo: "
+                    "check the host password, or configure passwordless "
+                    "sudo on the server.)")
+            res.error = (res.error + " " if res.error else "") + hint
+        return res
+
+    @staticmethod
+    def _looks_like_sudo_issue(text):
+        low = text.lower()
+        return ("a terminal is required" in low
+                or "a password is required" in low
+                or "requiretty" in low)
 
     # ------------------------------------------------------------- files
 
